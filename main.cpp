@@ -17,11 +17,15 @@ void handleKeyInput(EyeTracker* tracker) {
 
 void captureWebcam(VideoCapture* capture) {
     capture->open(0);
+
     if (!capture->isOpened()) {
         cout << "ERROR ACQUIRING VIDEO FEED\n";
         getchar();
         exit(1);
     }
+
+	//capture->set(CV_CAP_PROP_FRAME_WIDTH, 320);
+	//capture->set(CV_CAP_PROP_FRAME_HEIGHT, 240);
 }
 
 int main() {

@@ -19,6 +19,11 @@ class EyeTracker : public Tracker {
 		Mat eyeImage;
 		CascadeClassifier faceCascade;
 		CascadeClassifier eyeCascade;
+        struct FeatureResult {
+            bool found;
+            Mat image;
+            Rect frame;
+        };
 
 		void updateDebugWindow() {
             if (this->foundFace) {
@@ -26,43 +31,42 @@ class EyeTracker : public Tracker {
             }
 
             if (this->foundEye) {
-                rectangle(this->image, this->eyeFrame, this->frameColor);
+                Rect frame = Rect(this->eyeFrame);
+                frame.x += this->faceFrame.x;
+                frame.y += this->faceFrame.y;
+                rectangle(this->image, frame, this->frameColor);
             }
 
             Tracker::updateDebugWindow();
         }
 
-		void tellIfFeatureHasChangedVisibility(bool newFound, bool found, string name) {
-			if (newFound && !found) {
+		void tellIfFeatureHasChangedVisibility(bool newFound, bool oldFound, string name) {
+			if (newFound && !oldFound) {
                 this->say("Found " + name);
-            } else if (!newFound && found) {
+            } else if (!newFound && oldFound) {
                 this->say("Lost " + name);
             }
 		}
 
 		void updateTrackingAndControlMouse() {
-            bool foundFace = this->findFeature(
-                &this->imageGray,
-                &this->faceCascade,
-                &this->faceFrame,
-                &this->faceImage
-            );
+            FeatureResult result = this->findFeature(this->imageGray, &this->faceCascade, 30);
+			this->tellIfFeatureHasChangedVisibility(result.found, this->foundFace, "face");
+            this->foundFace = result.found;
+            this->faceFrame = result.frame;
+            this->faceImage = result.image;
 
-			this->tellIfFeatureHasChangedVisibility(foundFace, this->foundFace, "face");
-            this->foundFace = foundFace;
+            if (this->foundFace) {
+                imshow("face match", result.image);
 
-            if (foundFace) {
-                bool foundEye = this->findFeature(
-                    &this->faceImage,
-                    &this->eyeCascade,
-                    &this->eyeFrame,
-                    &this->eyeImage
-                );
+                FeatureResult result = this->findFeature(this->faceImage, &this->eyeCascade, 20);
+				this->tellIfFeatureHasChangedVisibility(result.found, this->foundEye, "eye");
+                this->foundEye = result.found;
+                this->eyeFrame = result.frame;
+                this->eyeImage = result.image;
 
-				this->tellIfFeatureHasChangedVisibility(foundEye, this->foundEye, "eye");
-                this->foundEye = foundEye;
+                if (this->foundEye) {
+                    imshow("eye match", result.image);
 
-                if (foundEye) {
                     if (this->eyesAreClosed) {
                         if (this->closedEyeDuration >= this->rightClickDelay) {
                             this->rightClickWithMouse();
@@ -77,39 +81,50 @@ class EyeTracker : public Tracker {
             }
         }
 
-        bool findFeature(Mat* image, CascadeClassifier* cascade, Rect* frame, Mat* frameImage) {
+        FeatureResult findFeature(Mat image, CascadeClassifier* cascade, int size) {
             vector<Rect> features;
+            FeatureResult result;
+
+            // Assume that nothing was found
+            result.found = false;
 
             // Find all features
-            this->faceCascade.detectMultiScale(*image, features, 1.1, 2, 0|CV_HAAR_SCALE_IMAGE, Size(30, 30));
+            cascade->detectMultiScale(image, features, 1.1, 2, 0|CV_HAAR_SCALE_IMAGE, Size(size, size));
 
             // Return if no feature was found
             if (features.size() == 0) {
-                return false;
+                return result;
             }
 
             // Find the larges feature
-            frame = &features[0];
+            result.frame = features[0];
+            result.image = image(features[0]);
             for (int i = 1; i < features.size(); i++) {
-                int area = features[i].area();
-                if (area > frame->area()) {
-                    frame = &features[i];
-                    Mat tempFrameImage = (*image)(features[i]);
-                    frameImage = &tempFrameImage;
+                Rect feature = features[i];
+                int featureArea = feature.area();
+                int resultArea = result.frame.area();
+
+                if (
+                    featureArea > 0 &&
+                    featureArea > resultArea
+                    //(float)featureArea / (float)resultArea > 1.5
+                ) {
+                    result.frame = feature;
+                    result.image = image(feature);
                 }
             }
 
-            return true;
-        }
-
-        void setFoundFeature(bool newFound, bool* found, string name) {
-            if (newFound && !*found) {
-                this->say("Found " + name);
-            } else if (!newFound && *found) {
-                this->say("Lost " + name);
+            // Verify that the found feature has a size
+            Size resultImageSize = result.image.size();
+            if (
+                result.frame.area() > 0 &&
+                resultImageSize.width > 0 &&
+                resultImageSize.height > 0
+            ) {
+                result.found = true;
             }
 
-            found = &newFound;
+            return result;
         }
 
         void findEyeDirection() {

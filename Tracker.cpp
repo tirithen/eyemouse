@@ -15,7 +15,10 @@ class Tracker {
 		CvScalar frameColor;
 
         void updateDebugWindow() {
-            imshow(this->debugWindowName, this->image);
+            Size size = this->image.size();
+            if (size.width > 0 && size.height > 0) {
+                imshow(this->debugWindowName, this->image);
+            }
         }
 
         void say(string message) {

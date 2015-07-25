@@ -4,26 +4,35 @@
 using namespace std;
 using namespace cv;
 
+struct FeatureResult {
+    bool found;
+    Mat image;
+    Rect frame;
+};
+
+struct Pupil {
+    bool found;
+    Point position;
+    int radius;
+};
+
 class EyeTracker : public Tracker {
     protected:
         bool foundFace;
         bool foundEye;
+        bool foundPupil;
         bool eyesAreClosed;
         unsigned int closedEyeDuration;
         unsigned int rightClickDelay;
         int eyesX;
         int eyesY;
+        Pupil pupil;
         Rect faceFrame;
         Rect eyeFrame;
         Mat faceImage;
 		Mat eyeImage;
 		CascadeClassifier faceCascade;
 		CascadeClassifier eyeCascade;
-        struct FeatureResult {
-            bool found;
-            Mat image;
-            Rect frame;
-        };
 
 		void updateDebugWindow() {
             if (this->foundFace) {
@@ -31,10 +40,11 @@ class EyeTracker : public Tracker {
             }
 
             if (this->foundEye) {
-                Rect frame = Rect(this->eyeFrame);
-                frame.x += this->faceFrame.x;
-                frame.y += this->faceFrame.y;
-                rectangle(this->image, frame, this->frameColor);
+                rectangle(this->image, this->eyeFrame, this->frameColor);
+            }
+
+            if (this->foundPupil) {
+                circle(this->image, this->pupil.position, this->pupil.radius, this->frameColor);
             }
 
             Tracker::updateDebugWindow();
@@ -49,6 +59,10 @@ class EyeTracker : public Tracker {
 		}
 
 		void updateTrackingAndControlMouse() {
+            this->foundFace = false;
+            this->foundEye = false;
+            this->foundPupil = false;
+
             FeatureResult result = this->findFeature(this->imageGray, &this->faceCascade, 30);
 			this->tellIfFeatureHasChangedVisibility(result.found, this->foundFace, "face");
             this->foundFace = result.found;
@@ -56,8 +70,6 @@ class EyeTracker : public Tracker {
             this->faceImage = result.image;
 
             if (this->foundFace) {
-                imshow("face match", result.image);
-
                 FeatureResult result = this->findFeature(this->faceImage, &this->eyeCascade, 20);
 				this->tellIfFeatureHasChangedVisibility(result.found, this->foundEye, "eye");
                 this->foundEye = result.found;
@@ -65,7 +77,9 @@ class EyeTracker : public Tracker {
                 this->eyeImage = result.image;
 
                 if (this->foundEye) {
-                    imshow("eye match", result.image);
+                    // Apply face frame offset to eye frame
+                    this->eyeFrame.x += this->faceFrame.x;
+                    this->eyeFrame.y += this->faceFrame.y;
 
                     if (this->eyesAreClosed) {
                         if (this->closedEyeDuration >= this->rightClickDelay) {
@@ -128,7 +142,44 @@ class EyeTracker : public Tracker {
         }
 
         void findEyeDirection() {
+            Mat thresholdImage;
 
+            // Create inverted and equalized image
+            equalizeHist(~this->eyeImage, thresholdImage);
+            //thresholdImage = Mat(~this->eyeImage); // Without equalization
+
+            // Make the image binary
+            threshold(thresholdImage, thresholdImage, 220, 255, THRESH_BINARY);
+
+            // Apply some blur
+            blur(thresholdImage, thresholdImage, Size(3, 3));
+
+            // Find all contours
+            vector<vector<Point> > contours;
+            findContours(thresholdImage.clone(), contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+
+            // Fill holes in each contour
+            drawContours(thresholdImage, contours, -1, CV_RGB(255,255,255), -1);
+
+            // Find the round white blob (pupil)
+            for (int i = 0; i < contours.size(); i++) {
+                double area = contourArea(contours[i]);    // Blob area
+                Rect frame = boundingRect(contours[i]);    // Bounding box
+                int radius = frame.width / 2;              // Approximate radius
+
+                // Look for round shaped blob
+                if (
+                    area >= 30 &&
+                    abs(1 - ((double)frame.width / (double)frame.height)) <= 0.2 &&
+                    abs(1 - (area / (CV_PI * pow(radius, 2)))) <= 0.2
+                ) {
+                    this->pupil.position.x = frame.x + radius + this->eyeFrame.x;
+                    this->pupil.position.y = frame.y + radius + this->eyeFrame.y;
+                    this->pupil.radius = radius;
+                    this->foundPupil = true;
+                    break;
+                }
+            }
         }
 
         void moveMousePointer() {

@@ -62,6 +62,9 @@ class Tracker {
 			// Grab the current image
             this->capture->read(this->image);
 
+            // Flip the image
+            //flip(this->image, this->image, 1);
+
             // Create a gray image
             cvtColor(this->image, this->imageGray, CV_BGR2GRAY);
 		}

@@ -24,8 +24,8 @@ void captureWebcam(VideoCapture* capture) {
         exit(1);
     }
 
-	//capture->set(CV_CAP_PROP_FRAME_WIDTH, 320);
-	//capture->set(CV_CAP_PROP_FRAME_HEIGHT, 240);
+	//capture->set(CV_CAP_PROP_FRAME_WIDTH, 500);
+	//capture->set(CV_CAP_PROP_FRAME_HEIGHT, 500);
 }
 
 int main() {

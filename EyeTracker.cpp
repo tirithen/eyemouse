@@ -59,8 +59,6 @@ class EyeTracker : public Tracker {
 		}
 
 		void updateTrackingAndControlMouse() {
-            this->foundFace = false;
-            this->foundEye = false;
             this->foundPupil = false;
 
             FeatureResult result = this->findFeature(this->imageGray, &this->faceCascade, 30);
@@ -149,10 +147,13 @@ class EyeTracker : public Tracker {
             //thresholdImage = Mat(~this->eyeImage); // Without equalization
 
             // Make the image binary
-            threshold(thresholdImage, thresholdImage, 220, 255, THRESH_BINARY);
+            threshold(thresholdImage, thresholdImage, 250, 255, THRESH_BINARY);
 
             // Apply some blur
-            blur(thresholdImage, thresholdImage, Size(3, 3));
+            blur(thresholdImage, thresholdImage, Size(6, 6));
+
+            // Make the image binary
+            threshold(thresholdImage, thresholdImage, 100, 255, THRESH_BINARY);
 
             // Find all contours
             vector<vector<Point> > contours;
@@ -170,8 +171,8 @@ class EyeTracker : public Tracker {
                 // Look for round shaped blob
                 if (
                     area >= 30 &&
-                    abs(1 - ((double)frame.width / (double)frame.height)) <= 0.2 &&
-                    abs(1 - (area / (CV_PI * pow(radius, 2)))) <= 0.2
+                    abs(1 - ((double)frame.width / (double)frame.height)) <= 0.5 &&
+                    abs(1 - (area / (CV_PI * pow(radius, 2)))) <= 0.5
                 ) {
                     this->pupil.position.x = frame.x + radius + this->eyeFrame.x;
                     this->pupil.position.y = frame.y + radius + this->eyeFrame.y;
@@ -180,6 +181,8 @@ class EyeTracker : public Tracker {
                     break;
                 }
             }
+
+            imshow("tresh pupil", thresholdImage);
         }
 
         void moveMousePointer() {
@@ -203,7 +206,10 @@ class EyeTracker : public Tracker {
             this->rightClickDelay = rightClickDelay;
 
             this->faceCascade.load("haarcascade_frontalface_alt2.xml");
-            this->eyeCascade.load("haarcascade_eye.xml");
+            //this->eyeCascade.load("haarcascade_eye.xml");
+            //this->eyeCascade.load("haarcascade_lefteye_2splits.xml");
+            this->eyeCascade.load("haarcascade_righteye_2splits.xml");
+            //this->eyeCascade.load("haarcascade_eye_three_eyeglasses.xml");;
         }
 
         string getClassName() {

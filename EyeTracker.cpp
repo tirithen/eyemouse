@@ -12,8 +12,13 @@ struct FeatureResult {
 
 struct Pupil {
     bool found;
-    Point position;
+    Point2f position;
+    Point2f lastPosition;
     int radius;
+    int direction;
+    int speed;
+    Mat thresholdImage;
+    Mat lastThresholdImage;
 };
 
 class EyeTracker : public Tracker {
@@ -33,6 +38,7 @@ class EyeTracker : public Tracker {
 		Mat eyeImage;
 		CascadeClassifier faceCascade;
 		CascadeClassifier eyeCascade;
+        TermCriteria pupilFlowCriteria;
 
 		void updateDebugWindow() {
             if (this->foundFace) {
@@ -177,12 +183,38 @@ class EyeTracker : public Tracker {
                     this->pupil.position.x = frame.x + radius + this->eyeFrame.x;
                     this->pupil.position.y = frame.y + radius + this->eyeFrame.y;
                     this->pupil.radius = radius;
+                    this->pupil.lastThresholdImage = this->pupil.thresholdImage;
+                    this->pupil.thresholdImage = thresholdImage;
                     this->foundPupil = true;
                     break;
                 }
             }
 
+            // If pupil was not found abort
+            if (!this->foundPupil) {
+                return;
+            }
+
             imshow("tresh pupil", thresholdImage);
+
+            vector<uchar> status;
+            vector<float> error;
+
+            vector<Point2f> positions;
+            positions.insert(positions.end(), this->pupil.position);
+            //features[0] = this->pupil.lastPosition;
+            //vector<Point2f> newPositions;
+            Mat newPositions;
+            //position[0] = this->pupil.position;
+            /*
+            calcOpticalFlowPyrLK(
+                this->pupil.lastThresholdImage, this->pupil.thresholdImage,
+                positions, newPositions,
+                status, error,
+                Size(31, 31), 0, this->pupilFlowCriteria, 0, 0.001
+            );
+            */
+
         }
 
         void moveMousePointer() {
@@ -204,6 +236,7 @@ class EyeTracker : public Tracker {
             this->eyesAreClosed = false;
             this->closedEyeDuration = 0;
             this->rightClickDelay = rightClickDelay;
+            this->pupilFlowCriteria = TermCriteria(TermCriteria::COUNT|TermCriteria::EPS, 20, 0.03);
 
             this->faceCascade.load("haarcascade_frontalface_alt2.xml");
             //this->eyeCascade.load("haarcascade_eye.xml");

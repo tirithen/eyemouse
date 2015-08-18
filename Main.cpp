@@ -1,4 +1,5 @@
-#include "EyeTracker.cpp"
+#include <stdio.h>
+#include "EyeTracker.h"
 #include "opencv2/opencv.hpp"
 
 using namespace std;
